@@ -19,6 +19,7 @@ library(lubridate)
 dataset = read.csv("./A1_data.csv")
 
 # Exploratory Data Analysis
+
 # ------- 1. Distinguish Attributes -------
 
 #Structure of the dataset
@@ -29,7 +30,55 @@ str(dataset)
 print("Summary of the dataset:")
 summary(dataset)
 
-#Bar graph too see number of cases per class
+
+# ------- 2. Missing Values and Outliers -------
+
+# Print the number of missing values
+print("Total missing values in the dataset")
+sum(is.na(dataset))
+
+#Missing values per column
+print("Missing values per column:")
+colSums(is.na(dataset))
+
+# Impute missing values for numeric columns with mean
+numeric_cols <- names(dataset)[sapply(dataset, is.numeric)]
+for (col in numeric_cols) {
+  missing_idx <- which(is.na(dataset[[col]]))
+  if (length(missing_idx) > 0) {
+    mean_val <- mean(dataset[[col]], na.rm = TRUE)
+    dataset[[col]][missing_idx] <- mean_val
+  }
+}
+
+# Impute missing values for categorical columns with mode
+non_numeric_cols <- names(dataset)[sapply(dataset, function(x) !is.numeric(x))]
+for (col in non_numeric_cols) {
+  # Convert empty strings to NA
+  if (is.character(dataset[[col]])) {
+    dataset[[col]][dataset[[col]] == ""] <- NA
+  }
+  missing_idx <- which(is.na(dataset[[col]]))
+  if (length(missing_idx) > 0) {
+    # Mode function for categorical
+    get_mode <- function(v) {
+      uniqv <- unique(v[!is.na(v)])
+      uniqv[which.max(tabulate(match(v, uniqv)))]
+    }
+    mode_val <- get_mode(dataset[[col]])
+    dataset[[col]][missing_idx] <- mode_val
+  }
+}
+
+# ------- 3. Univariate Analysis -------
+
+#Plot box Plot for TxnAmt
+ggplot(dataset, aes(y = TxnAmt)) +
+  geom_boxplot(fill = "lightblue", color = "black") +
+  labs(title = "Box Plot of Transaction Amount", y = "Transaction Amount") +
+  theme_minimal()
+
+#Bar graph to see number of cases per class
 ggplot(dataset, aes(x = factor(isFraud), fill = factor(isFraud))) +
   geom_bar(color = "black") +
   labs(title = "Number of Cases per Class", x = "isFraud", y = "Total", fill = "isFraud") +
@@ -40,112 +89,18 @@ class_counts <- table(dataset$isFraud)
 print("Number of cases per class:")
 print(class_counts)
 
-# ------- 2. Missing Values and Outliers -------
-# Print the number of missing values
-print("Total missing values in the dataset")
-sum(is.na(dataset))
-
-#Missing values per column
-print("Missing values per column:")
-colSums(is.na(dataset))
-
-
-# Synthetic Distribution Curve Imputation for Missing Values
-
-set.seed(42)
-
-# Find numeric columns in the dataset
-numeric_cols <- names(dataset)[sapply(dataset, is.numeric)]
-
-# For each numeric column, impute missing values
-for (col in numeric_cols) {
-  missing_idx <- which(is.na(dataset[[col]]))
-  if (length(missing_idx) > 0) {
-    observed <- dataset[[col]][!is.na(dataset[[col]])]
-    observed <- observed[!is.na(observed)] # Ensure no NA in observed
-    if (length(observed) > 0) {
-      imputed_values <- sample(observed, length(missing_idx), replace = TRUE)
-    } else {
-      imputed_values <- rep(NA, length(missing_idx))
-    }
-    dataset[[col]][missing_idx] <- imputed_values
-  }
-}
-
-# Find non-numeric columns
-non_numeric_cols <- names(dataset)[sapply(dataset, function(x) !is.numeric(x))]
-
-#For Non Numeric columns, replace missing values with mode
-# Convert blank strings in non-numeric columns to NA
-for (col in non_numeric_cols) {
-  if (is.character(dataset[[col]])) {
-    dataset[[col]][dataset[[col]] == ""] <- NA
-  }
-}
-
-# For each non-numeric column, impute missing values by random sampling
-for (col in non_numeric_cols) {
-  missing_idx <- which(is.na(dataset[[col]]))
-  if (length(missing_idx) > 0) {
-    observed <- dataset[[col]][!is.na(dataset[[col]])]
-    observed <- observed[!is.na(observed)] # Ensure no NA in observed
-    if (length(observed) > 0) {
-      imputed_values <- sample(observed, length(missing_idx), replace = TRUE)
-    } else {
-      imputed_values <- rep(NA, length(missing_idx))
-    }
-    dataset[[col]][missing_idx] <- imputed_values
-  }
-}
-
-
-# Print out the NAs in card4 column
-cat("Indices of NAs in card4 column:", which(is.na(dataset$card4)), "\n")
-cat("Values of NAs in card4 column:", dataset$card4[is.na(dataset$card4)], "\n")
-
-
-#Plot box Plot for TxnAmt to see outliers
-ggplot(dataset, aes(y = TxnAmt)) +
-  geom_boxplot(fill = "lightblue", color = "black") +
-  labs(title = "Box Plot of Transaction Amount", y = "Transaction Amount") +
-  theme_minimal() 
-
-#remove the outliers
-# Cap outliers for all numeric columns using Median ± 3 x IQR/(2 x 0.6745)
-cap_iqr_outliers <- function(x) {
-  Q1 <- quantile(x, 0.25, na.rm = TRUE)
-  Q3 <- quantile(x, 0.75, na.rm = TRUE)
-  IQR_val <- Q3 - Q1
-  lower_limit <- Q1 - 1.5 * IQR_val
-  upper_limit <- Q3 + 1.5 * IQR_val
-  x[x < lower_limit] <- lower_limit
-  x[x > upper_limit] <- upper_limit
-  return(x)
-}
-
-# Apply to all numeric columns
-for (col in numeric_cols) {
-  dataset[[col]] <- cap_iqr_outliers(dataset[[col]])
-}
-
-print("Box plot after removing outliers")
-
-ggplot(dataset, aes(y = TxnAmt)) +
-  geom_boxplot(fill = "lightblue", color = "black") +
-  labs(title = "Box Plot of Transaction Amount After Removing Outliers", y = "Transaction Amount") +
-  theme_minimal()
-
-# ------- 3. Univariate Analysis -------
-
 # Histogram of TxnAmt
 ggplot(dataset, aes(x = TxnAmt)) +
-  geom_histogram(binwidth = 50, fill = "skyblue", color = "black") +
+  geom_histogram(binwidth = 100, fill = "skyblue", color = "black") +
   labs(title = "Histogram of Transaction Amount", x = "Transaction Amount", y = "Count") +
   theme_minimal()
 
+# Histogram of TxnAmt < 500
 ggplot(dataset %>% filter(TxnAmt < 500), aes(x = TxnAmt)) +
-  geom_histogram(binwidth = 10, fill = "deepskyblue", color = "black") +
-  labs(title = "Histogram of Transaction Amounts Below 500", x = "Transaction Amount (<500)", y = "Count") +
+  geom_histogram(binwidth = 10, fill = "orange", color = "black") +
+  labs(title = "Histogram of Transaction Amounts < 500",
+       x = "Transaction Amount",
+       y = "Count") +
   theme_minimal()
 
 # Mean, Median, Mode for TxnAmt
@@ -153,11 +108,13 @@ txn_mean <- mean(dataset$TxnAmt, na.rm = TRUE)
 txn_median <- median(dataset$TxnAmt, na.rm = TRUE)
 txn_max <- max(dataset$TxnAmt, na.rm = TRUE)
 txn_min <- min(dataset$TxnAmt, na.rm = TRUE)
+
 # Mode function for numeric
 get_mode <- function(v) {
   uniqv <- unique(v)
   uniqv[which.max(tabulate(match(v, uniqv)))]
 }
+
 txn_mode <- get_mode(dataset$TxnAmt)
 cat("TxnAmt Mean:", txn_mean, "\n")
 cat("TxnAmt Median:", txn_median, "\n")
@@ -194,6 +151,125 @@ ggplot(dataset, aes(x = R_emaildomain, y = (..count..) / sum(..count..))) +
   theme_minimal()
 
 
-
 # ------- 4. Bivariate Analysis -------
+
+# Stacked Barchart of isFraud as a factor against productCD
+ggplot(dataset, aes(x = ProductCD, fill = factor(isFraud))) +
+  geom_bar(position = "stack", color = "black") +
+  labs(
+    title = "Fraud vs Non-Fraud Cases by ProductCD",
+    x = "ProductCD",
+    y = "Count",
+    fill = "isFraud"
+  ) +
+  theme_minimal()
+
+
+# Stacked Barchart of isFraud as a factor against card4
+ggplot(dataset, aes(x = card4, fill = factor(isFraud))) +
+  geom_bar(position = "stack", color = "black") +
+  labs(
+    title = "Fraud vs Non-Fraud Cases by Card Company",
+    x = "card4",
+    y = "Count",
+    fill = "isFraud"
+  ) +
+  theme_minimal()
+
+# Stacked Barchart of isFraud as a factor against card6
+ggplot(dataset, aes(x = card6, fill = factor(isFraud))) +
+  geom_bar(position = "stack", color = "black") +
+  labs(
+    title = "Fraud vs Non-Fraud Cases by Card Company",
+    x = "card6",
+    y = "Count",
+    fill = "isFraud"
+  ) 
+  theme_minimal()
+
+# Print mean TxnAmt for each isFraud class
+mean_txn_0 <- mean(dataset$TxnAmt[dataset$isFraud == 0], na.rm = TRUE)
+mean_txn_1 <- mean(dataset$TxnAmt[dataset$isFraud == 1], na.rm = TRUE)
+cat("Mean TxnAmt for isFraud = 0:", mean_txn_0, "\n")
+cat("Mean TxnAmt for isFraud = 1:", mean_txn_1, "\n")
+
+
+# Print number of cases for isFraud 0 and 1 where TxnAmt < 500
+count_0_below_500 <- sum(dataset$isFraud == 0 & dataset$TxnAmt < 500, na.rm = TRUE)
+count_1_below_500 <- sum(dataset$isFraud == 1 & dataset$TxnAmt < 500, na.rm = TRUE)
+cat("Number of cases for isFraud = 0 and TxnAmt < 500:", count_0_below_500, "\n")
+cat("Number of cases for isFraud = 1 and TxnAmt < 500:", count_1_below_500, "\n")
+
+# Print number of cases for isFraud 0 and 1 where TxnAmt > 500
+count_0_above_500 <- sum(dataset$isFraud == 0 & dataset$TxnAmt > 500, na.rm = TRUE)
+count_1_above_500 <- sum(dataset$isFraud == 1 & dataset$TxnAmt > 500, na.rm = TRUE)
+cat("Number of cases for isFraud = 0 and TxnAmt > 500:", count_0_above_500, "\n")
+cat("Number of cases for isFraud = 1 and TxnAmt > 500:", count_1_above_500, "\n")
+
+
+# Side-by-side box plot for log-transformed TxnAmt by isFraud
+ggplot(dataset, aes(x = factor(isFraud), y = log1p(TxnAmt), fill = factor(isFraud))) +
+  geom_boxplot() +
+  labs(
+    title = "Log(Transaction Amount) by Fraud Status",
+    x = "isFraud",
+    y = "Log(Transaction Amount)",
+    fill = "isFraud"
+  ) +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "red")) +
+  theme_minimal()
+
+# Create a new feature: TransactionHour extracted from TransactionDT
+# Use lubridate for robust date-time handling
+
+date_data <- dataset %>%
+  mutate(TransactionDate = as.POSIXct(TxnDT, origin = "2017-12-01", tz = "UTC"),
+         TransactionHour = hour(TransactionDate))
+
+# This shows the distribution of transaction amounts by hour and fraud status
+
+ggplot(date_data, aes(x = factor(TransactionHour), y = TxnAmt, fill = factor(isFraud))) +
+  geom_violin(alpha = 0.6, trim = FALSE) +
+  geom_jitter(aes(color = factor(isFraud)), width = 0.2, height = 0, alpha = 0.3, size = 0.5) +
+  labs(x = 'Transaction Hour', y = 'Transaction Amount', fill = 'Is Fraud',
+       title = 'Distribution of Transaction Amounts by Hour and Fraud Status') +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "red")) +
+  scale_color_manual(values = c("0" = "steelblue", "1" = "red")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggplot(dataset, aes(x = id30, fill = factor(isFraud))) +
+  geom_bar(position = "stack", color = "black") +
+  labs(
+    title = "Fraud vs Non-Fraud Cases by id30",
+    x = "ProductCD",
+    y = "Count",
+    fill = "isFraud"
+  ) +
+  theme_minimal()
+  
+# Correlation matrix for numeric features
+numeric_data <- dataset %>% select(where(is.numeric))
+
+# Remove columns with zero variance
+zero_var_cols <- sapply(numeric_data, function(x) sd(x, na.rm = TRUE) == 0)
+numeric_data_filtered <- numeric_data[, !zero_var_cols]
+corr_mat <- cor(numeric_data_filtered, use = "complete.obs")
+corrplot(corr_mat, method = "color", tl.cex = 0.7, tl.col = "black", tl.srt = 45, mar = c(2,2,2,2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
